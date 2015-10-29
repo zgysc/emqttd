@@ -384,8 +384,8 @@ handle_cast({resume, ClientId, ClientPid}, Session) ->
         OldClientPid == ClientPid ->
             ok; %% ??
         true ->
-            lager:error([{client, ClientId}], "Session(~s): ~p kickout ~p",
-                            [ClientId, ClientPid, OldClientPid]),
+            lager:warning([{client, ClientId}], "Session(~s): ~p kickout ~p",
+                          [ClientId, ClientPid, OldClientPid]),
             unlink(OldClientPid),
             OldClientPid ! {stop, duplicate_id, ClientPid}
     end,
@@ -556,7 +556,7 @@ handle_info({'EXIT', ClientPid, Reason}, Session = #session{clean_sess    = fals
                                                             client_pid    = ClientPid,
                                                             expired_after = Expires}) ->
     lager:info("Session(~s): unlink with client ~p: reason=~p",
-                   [ClientId, ClientPid, Reason]),
+               [ClientId, ClientPid, Reason]),
     TRef = timer(Expires, session_expired),
     noreply(Session#session{client_pid = undefined, expired_timer = TRef});
 
@@ -564,11 +564,11 @@ handle_info({'EXIT', Pid, Reason}, Session = #session{client_id  = ClientId,
                                                       client_pid = ClientPid}) ->
 
     lager:error("Session(~s): Unexpected EXIT: client_pid=~p, exit_pid=~p, reason=~p",
-                    [ClientId, ClientPid, Pid, Reason]),
+                [ClientId, ClientPid, Pid, Reason]),
     noreply(Session);
 
 handle_info(session_expired, Session = #session{client_id = ClientId}) ->
-    lager:error("Session(~s) expired, shutdown now.", [ClientId]),
+    lager:warning("Session(~s) expired, shutdown now.", [ClientId]),
     {stop, {shutdown, expired}, Session};
 
 handle_info(Info, Session = #session{client_id = ClientId}) ->

@@ -114,23 +114,35 @@ handle_cast({register, Client = #mqtt_client{client_id = ClientId, client_pid = 
 		[] -> 
             ok
 	end,
-    ets:insert(mqtt_client, Client),
+    ets:insert(mqtt_client, Client#mqtt_client{mon_ref=erlang:monitor(process, Pid)}),
     {noreply, setstats(State)};
 
 handle_cast({unregister, ClientId, Pid}, State) ->
 	case ets:lookup(mqtt_client, ClientId) of
-	[#mqtt_client{client_pid = Pid}] ->
-		ets:delete(mqtt_client, ClientId);
-	[_] -> 
-		ignore;
-	[] ->
-		lager:error("Cannot find clientId '~s' with ~p", [ClientId, Pid])
+        [#mqtt_client{client_pid = Pid, mon_ref = MRef}] ->
+            erlang:demonitor(MRef, [flush]),
+            ets:delete(mqtt_client, ClientId);
+        [_] -> 
+            ignore;
+        [] ->
+            lager:error("Cannot find clientId '~s' with ~p", [ClientId, Pid])
 	end,
 	{noreply, setstats(State)};
 
 handle_cast(Msg, State) ->
     lager:error("Unexpected Msg: ~p", [Msg]),
     {noreply, State}.
+
+handle_info({'DOWN', MRef, process, DownPid, Reason}, State) ->
+    lager:warning("Client~p DOWN for ~p", [DownPid, Reason]),
+    MP = #mqtt_client{client_pid = DownPid, mon_ref = MRef, _ = '_'},
+    case ets:match_object(mqtt_client, MP) of
+        [Client] ->
+            ets:delete_object(mqtt_client, Client);
+        _ ->
+            ok
+    end,
+    {noreply, State};
 
 handle_info(Info, State) ->
     lager:error("Unexpected Msg: ~p", [Info]),

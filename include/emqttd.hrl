@@ -98,7 +98,8 @@
     keepalive = 0,
     will_topic    :: undefined | binary(),
     ws_initial_headers :: list({header_key(), header_val()}),
-    connected_at  :: erlang:timestamp()
+    connected_at  :: erlang:timestamp(),
+    mon_ref       :: reference()
 }).
 
 -type mqtt_client() :: #mqtt_client{}.

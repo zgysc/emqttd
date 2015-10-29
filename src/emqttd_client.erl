@@ -86,9 +86,6 @@ unsubscribe(CPid, Topics) ->
 init([SockArgs = {Transport, Sock, _SockFun}, MqttEnv]) ->
     % Transform if ssl.
     {ok, NewSock}  = esockd_connection:accept(SockArgs),
-    %%TODO:...
-    {ok, BufSizes} = inet:getopts(Sock, [sndbuf, recbuf, buffer]),
-    io:format("~p~n", [BufSizes]),
     {ok, Peername} = emqttd_net:peername(Sock),
     {ok, ConnStr}  = emqttd_net:connection_string(Sock, inbound),
     SendFun    = send_fun(Transport, NewSock),
@@ -169,8 +166,6 @@ handle_info({inet_async, _Sock, _Ref, {error, Reason}}, State) ->
     network_error(Reason, State);
 
 handle_info({inet_reply, _Ref, ok}, State) ->
-    %%TODO: ok...
-    io:format("inet_reply ok~n"),
     noreply(State);
 
 handle_info({inet_reply, _Sock, {error, Reason}}, State) ->
@@ -275,9 +270,7 @@ network_error(Reason, State = #state{peername = Peername}) ->
 
 rate_limit(_Size, State = #state{rate_limiter = undefined}) ->
     run_socket(State);
-rate_limit(Size, State = #state{socket = Sock, rate_limiter = Limiter}) ->
-    {ok, BufSizes} = inet:getopts(Sock, [sndbuf, recbuf, buffer]),
-    io:format("~p~n", [BufSizes]),
+rate_limit(Size, State = #state{rate_limiter = Limiter}) ->
     case esockd_rate_limiter:check(Limiter, Size) of
         {0, Limiter1} ->
             run_socket(State#state{conn_state = running, rate_limiter = Limiter1});
