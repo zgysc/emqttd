@@ -204,23 +204,37 @@ publish(Topic, Msg) when is_binary(Topic) ->
         end
 	end, match(Topic)).
 
+%%TODO: Refactor pub_rate later...
+
 %%------------------------------------------------------------------------------
 %% @doc Dispatch message locally. should only be called by publish.
 %% @end
 %%------------------------------------------------------------------------------
 -spec dispatch(Topic :: binary(), Msg :: mqtt_message()) -> non_neg_integer().
-dispatch(Topic, #mqtt_message{qos = Qos} = Msg ) when is_binary(Topic) ->
+dispatch(Topic, Msg) when is_binary(Topic) ->
     Subscribers = mnesia:dirty_read(subscriber, Topic),
     setstats(dropped, Subscribers =:= []),
+    PubRate = proplists:get_value(pub_rate, emqttd_broker:env(pubsub)),
+    if
+        PubRate =:= undefined ->
+            dispatch2(Subscribers, Msg);
+        PubRate >= length(Subscribers) ->
+            dispatch2(Subscribers, Msg);
+        true ->
+            SubsList = tuple_to_list(lists:split(PubRate, Subscribers)),
+            [begin dispatch2(Subs, Msg), timer:sleep(1000) end || Subs <- SubsList]
+    end,
+    length(Subscribers).
+
+dispatch2(Subscribers, Msg = #mqtt_message{qos = Qos}) ->
     lists:foreach(
         fun(#mqtt_subscriber{subpid=SubPid, qos = SubQos}) ->
-                Msg1 = if
-                    Qos > SubQos -> Msg#mqtt_message{qos = SubQos};
-                    true -> Msg
-                end,
-                SubPid ! {dispatch, Msg1}
-            end, Subscribers), 
-    length(Subscribers).
+            Msg1 = if
+                Qos > SubQos -> Msg#mqtt_message{qos = SubQos};
+                true -> Msg
+            end,
+            SubPid ! {dispatch, Msg1}
+        end, Subscribers).
 
 -spec match(Topic :: binary()) -> [mqtt_topic()].
 match(Topic) when is_binary(Topic) ->

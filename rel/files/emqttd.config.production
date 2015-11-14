@@ -136,7 +136,9 @@
         %% PubSub
         {pubsub, [
             %% default should be scheduler numbers
-            %% {pool_size, 8}
+            %% {pool_size, 8},
+            %% publish at the interval of 100k/sec
+            {pub_rate, 100000}
         ]},
         %% Bridge
         {bridge, [
