@@ -256,7 +256,9 @@ init([CleanSess, ClientId, ClientPid]) ->
             collect_interval  = emqttd_opts:g(collect_interval, SessEnv, 0),
             timestamp         = os:timestamp()},
     emqttd_sm:register_session(CleanSess, ClientId, sess_info(Session)),
-    %% start statistics
+    %% Run hooks
+    emqttd_broker:foreach_hooks('session.created', [ClientId, ClientPid]),
+    %% Start collector
     {ok, start_collector(Session), hibernate}.
 
 prioritise_call(Msg, _From, _Len, _State) ->
@@ -426,7 +428,12 @@ handle_cast({resume, ClientId, ClientPid}, Session = #session{client_id      = C
         end, Session1, lists:reverse(InflightQ)),
 
     %% Dequeue pending messages
-    hibernate(dequeue(Session2));
+    Session3 = dequeue(Session2),
+
+    %% Resume Hooks
+    emqttd_broker:foreach_hooks('session.resumed', [ClientId, ClientPid]),
+
+    hibernate(Session3);
 
 %% PUBACK
 handle_cast({puback, PktId}, Session = #session{awaiting_ack = AwaitingAck}) ->
@@ -484,9 +491,10 @@ handle_cast(Msg, State) ->
 
 %% Queue messages when client is offline
 handle_info({dispatch, Msg}, Session = #session{client_pid = undefined,
-                                                message_queue = Q})
+                                                message_queue = _Q})
     when is_record(Msg, mqtt_message) ->
-    hibernate(Session#session{message_queue = emqttd_mqueue:in(Msg, Q)});
+    %%TODO: Drop it directly for offline module will take care of it
+    hibernate(Session);
 
 %% Dispatch qos0 message directly to client
 handle_info({dispatch, Msg = #mqtt_message{qos = ?QOS_0}},
@@ -575,7 +583,9 @@ handle_info(Info, Session) ->
     ?LOG(critical, "Unexpected info: ~p", [Info], Session),
     hibernate(Session).
 
-terminate(_Reason, #session{clean_sess = CleanSess, client_id = ClientId}) ->
+terminate(Reason, #session{clean_sess = CleanSess, client_id = ClientId}) ->
+    %% Hooks
+    emqttd_broker:foreach_hooks('session.terminated', [ClientId, Reason]),
     emqttd_sm:unregister_session(CleanSess, ClientId).
 
 code_change(_OldVsn, Session, _Extra) ->
