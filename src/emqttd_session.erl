@@ -503,13 +503,16 @@ handle_info({dispatch, Msg = #mqtt_message{qos = ?QOS_0}},
     hibernate(Session);
 
 handle_info({dispatch, Msg = #mqtt_message{qos = QoS}},
-            Session = #session{message_queue = MsgQ})
+            Session = #session{message_queue  = MsgQ,
+                               inflight_queue = InflightQ})
     when QoS =:= ?QOS_1 orelse QoS =:= ?QOS_2 ->
 
-    case check_inflight(Session) of
-        true  ->
+    case {is_inflight(Msg, InflightQ), check_inflight(Session)} of
+        {true, _} ->
+            hibernate(Session);
+        {false, true} ->
             noreply(deliver(Msg, Session));
-        false ->
+        {false, false} ->
             hibernate(Session#session{message_queue = emqttd_mqueue:in(Msg, MsgQ)})
     end;
 
@@ -610,6 +613,12 @@ kick(ClientId, OldPid, Pid) ->
 %%------------------------------------------------------------------------------
 %% Check inflight and awaiting_rel
 %%------------------------------------------------------------------------------
+
+%% For Chat
+is_inflight(#mqtt_message{msgid = undefined}, _InflightQ) ->
+    false;
+is_inflight(#mqtt_message{msgid = MsgId}, InflightQ) ->
+    lists:keymember(MsgId, 2, InflightQ).
 
 check_inflight(#session{max_inflight = 0}) ->
      true;
