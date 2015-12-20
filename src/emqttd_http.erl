@@ -46,6 +46,63 @@ handle_request('GET', "/status", Req) ->
     Status = io_lib:format("Node ~s is ~s~nemqttd is ~s",
                             [node(), InternalStatus, AppStatus]),
     Req:ok({"text/plain", iolist_to_binary(Status)});
+    
+%%new push. You can push to a single clientId with any topic you want 
+%% param:
+%%        target  ::   clientId1,clientId2,clientId3...... | all
+handle_request('POST', "/mqtt/newpush", Req) ->
+    Params = mochiweb_request:parse_post(Req),
+    lager:info("HTTP new Publish: ~p", [Params]),
+    ClientId = get_value("client", Params, http),
+    Qos      = int(get_value("qos", Params, "1")),
+    Retain   = bool(get_value("retain", Params,  "0")),
+    Topic    = list_to_binary(get_value("topic", Params)),
+    Target   = list_to_binary(get_value("target", Params, "all")),
+    Payload  = list_to_binary(get_value("message", Params)),
+    case {validate(qos, Qos), validate(topic, Topic)} of
+        {true, true} ->
+            Msg = emqttd_message:make(ClientId, Qos, Topic, Payload),
+            if
+                Target =:= <<"all">> -> emqttd_pubsub:publish_all(Topic, Msg);
+                Target /= <<"all">> -> emqttd_pubsub:publish_batch(Target, Msg#mqtt_message{retain = Retain})
+            end,
+            Req:ok({"text/plain", <<"ok">>});
+        {false, _} ->
+            Req:respond({400, [], <<"Bad QoS">>});
+        {_, false} ->
+            Req:respond({400, [], <<"Bad Topic">>})
+    end;
+
+%%------------------------------------------
+%%check client is online or not
+%%------------------------------------------
+handle_request('GET',"/mqtt/online",Req) ->
+    Params = mochiweb_request:parse_qs(Req),
+    Cid = get_value("clientId", Params, http),
+    case emqttd_cm:lookup(list_to_binary(Cid)) of
+        undefined -> Req:ok({"text/plain", <<"0">>});
+        _   ->  Req:ok({"text/plain", <<"1">>})
+    end;
+
+%%--------------------------------------------
+%%subscriber topic for client at server side 
+%%--------------------------------------------
+handle_request('GET',"/mqtt/subtopic", Req) ->
+    Params=mochiweb_request:parse_qs(Req),
+    ClientId = list_to_binary(get_value("clientId", Params, http)),
+    Topic = list_to_binary(get_value("topic", Params, http)),
+    Flag = int(get_value("flag", Params, "1")),
+    Qos = int(get_value("qos", Params, "1")),
+    case emqttd_sm:lookup_session(ClientId) of
+        undefined -> Req:ok({"text/plain", <<"BAD_CLIENT">>});
+        Session -> #mqtt_session{sess_pid = Sess_pid} = Session,
+        case Flag of
+            1 -> _Status = emqttd_session:subscribe(Sess_pid, [{Topic, Qos}]);
+            0 -> _Status = emqttd_session:unsubscribe(Sess_pid, [Topic])
+        end,
+    Req:ok({"text/plain",<<"ok">>})
+    end;
+
 
 %%------------------------------------------------------------------------------
 %% HTTP Publish API
