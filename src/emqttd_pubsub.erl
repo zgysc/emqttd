@@ -43,7 +43,7 @@
 -export([start_link/4]).
 
 -export([create/2, lookup/2, subscribe/1, subscribe/2,
-         unsubscribe/1, unsubscribe/2, publish/1, delete/2]).
+         unsubscribe/1, unsubscribe/2, publish/1, delete/2, publish_batch/2, publish_all/2, lookup/2]).
 
 %% Subscriptions API
 
@@ -68,25 +68,21 @@
 %%% Mnesia callbacks
 %%%=============================================================================
 mnesia(boot) ->
-    ok = create_table(topic, ram_copies),
-    if_subscription(fun(RamOrDisc) ->
-                      ok = create_table(subscription, RamOrDisc)
-                    end);
+    ok = create_table(topic, disc_copies),
+    ok = create_table(subscription, disc_copies);
 
 mnesia(copy) ->
     ok = emqttd_mnesia:copy_table(topic),
-    %% Only one disc_copy???
-    if_subscription(fun(_RamOrDisc) ->
-                      ok = emqttd_mnesia:copy_table(subscription)
-                    end).
-
+    ok = emqttd_mnesia:copy_table(subscription).
 %% Topic Table
 create_table(topic, RamOrDisc) ->
     emqttd_mnesia:create_table(topic, [
             {type, bag},
             {RamOrDisc, [node()]},
             {record_name, mqtt_topic},
-            {attributes, record_info(fields, mqtt_topic)}]);
+            {attributes, record_info(fields, mqtt_topic)},
+            {storage_properties, [{ets, [compressed]},
+                                  {dets, [{auto_save, 5000}]}]}]);
 
 %% Subscription Table
 create_table(subscription, RamOrDisc) ->
@@ -257,6 +253,29 @@ publish(To, Msg) ->
                     end
                   end, match(To)).
 
+publish_all(To, Msg) ->
+    Records = ets:lookup(topic, To),
+    lists:foreach(fun(#mqtt_topic{topic = Topic, node = Node}) ->
+                    case Node =:= node() of
+                        true  ->
+                                lager:info("ready route at self node..."),
+                                ?ROUTER:route(Topic, Msg);
+                        false ->
+                                lager:info("topic is not at this node,rpc:cast to other node"),
+                                rpc:cast(Node, ?ROUTER, route, [Topic, Msg])
+                    end
+                  end, Records).
+
+publish_batch(Targets, Msg = #mqtt_message{topic = Topic}) ->
+    ClientIds = binary:split(Targets, <<",">>, [global]),
+    lists:foreach(fun(ClientId) ->
+         case emqttd_sm:lookup_session(ClientId) of
+                  undefined -> ok;
+                  Sess ->
+                        SessPid = Sess#mqtt_session.sess_pid,
+                        SessPid ! {dispatch, Topic, Msg}
+         end
+    end, ClientIds).
 %%------------------------------------------------------------------------------
 %% @doc Match Topic Name with Topic Filters
 %% @end
