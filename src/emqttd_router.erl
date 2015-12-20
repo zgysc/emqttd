@@ -141,14 +141,25 @@ route(Queue = <<"$Q/", _Q>>, Msg) ->
     end;
 
 route(Topic, Msg) ->
-    case ets:lookup(route, Topic) of
-        [] ->
-            emqttd_metrics:inc('messages/dropped');
-        Routes ->
-            lists:foreach(fun({_Topic, SubPid}) ->
-                            dispatch(SubPid, Topic, Msg)
-                          end, Routes)
-    end.
+    %%Should not read from route,  It should be read from subscription, because when server reboot, route will lost data
+    %%case ets:lookup(route, Topic) of
+    %%    [] ->
+    %%        emqttd_metrics:inc('messages/dropped');
+    %%    Routes ->
+    %%        lists:foreach(fun({_Topic, SubPid}) ->
+    %%                        dispatch(SubPid, Topic, Msg)
+    %%                      end, Routes)
+    %%end.
+    Pattern = #mqtt_subscription{subid = '$1', topic = Topic, qos = '_'},
+    Records = lists:flatten([ets:match(subscription, Pattern)]),
+    lists:foreach(fun(ClientId) ->
+         case emqttd_sm:lookup_session(ClientId) of
+                  undefined -> ok;
+                  Sess ->
+                        SessPid = Sess#mqtt_session.sess_pid,
+                        dispatch(SessPid, Topic, Msg)
+         end
+    end, Records).
 
 dispatch(SubPid, Topic, Msg) -> SubPid ! {dispatch, Topic, Msg}.
 
