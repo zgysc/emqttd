@@ -43,7 +43,7 @@
 -export([start_link/4]).
 
 -export([create/2, lookup/2, subscribe/1, subscribe/2,
-         unsubscribe/1, unsubscribe/2, publish/1, delete/2, publish_batch/2, publish_all/2, lookup/2]).
+         unsubscribe/1, unsubscribe/2, publish/1, delete/2, publish_batch/2, publish_all/2]).
 
 %% Subscriptions API
 
