@@ -76,21 +76,25 @@ handle_request('POST', "/mqtt/newpush", Req) ->
 
 %%------------------------------------------
 %%check client is online or not, not support cluster
+%% return  1:online    0: offline
 %%------------------------------------------
 handle_request('GET', "/mqtt/online", Req) ->
     Params = mochiweb_request:parse_qs(Req),
     Cid = get_value("clientId", Params, http),
     Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'})),
-    Result= lists:foldl(Fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
+    Result= lists:fold(fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
     if
         Result > 0 -> Req:ok({"text/plain", <<"1">>}); 
         Result =:= 0 -> Req:ok({"text/plain", <<"0">>})
     end;
 
+%%------------------------------------------
+%%list all my subscriptions
+%%------------------------------------------
 handle_request('GET', "/mqtt/mysub", Req) ->
   Params = mochiweb_request:parse_qs(Req),
   Cid = get_value("clientId", Params, http),
-  Lists = ets:lookup(subscription, ClientId),
+  Lists = ets:lookup(subscription, Cid),
   Status = io_lib:format("~p", [Lists]),
   Req:ok({"text/plain", iolist_to_binary(Status)});
 %%--------------------------------------------
