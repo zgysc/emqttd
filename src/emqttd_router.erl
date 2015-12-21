@@ -166,8 +166,8 @@ dispatch(SubPid, Topic, Msg) -> SubPid ! {dispatch, Topic, Msg}.
 %%Check client is online or not
 checkonline(ClientId) ->    
     case emqttd_cm:lookup(list_to_binary(Cid)) of
-        undefined -> <<"0">>;
-        _   ->  <<"1">>
+        undefined -> 0;
+        _   ->  1
     end.
 %%%=============================================================================
 %%% Internal Functions
