@@ -77,21 +77,22 @@ handle_request('POST', "/mqtt/newpush", Req) ->
 %%------------------------------------------
 %%check client is online or not, not support cluster
 %%------------------------------------------
-handle_request('GET',"/mqtt/online",Req) ->
+handle_request('GET', "/mqtt/online", Req) ->
     Params = mochiweb_request:parse_qs(Req),
     Cid = get_value("clientId", Params, http),
-    Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'}))，
-    lists:foreach(Fun(Node) -> 
-        case Node =:= node() of
-            true  -> 
-                    Retl= ?ROUTER:checkonline(Cid);
-            false -> RetR= rpc:cast(Node, ?ROUTER, checkonline, [Cid])
-        end
-    
-    end, Nodes],
-    %%TODO:不会写了,应该所有节点处理完毕后，只要有一个在线的就认为在线
-    Req:ok({"text/plain", <<"1">>});
+    Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'})),
+    Result= lists:foldl(Fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
+    if
+        Result > 0 -> Req:ok({"text/plain", <<"1">>}); 
+        Result =:= 0 -> Req:ok({"text/plain", <<"0">>})
+    end;
 
+handle_request('GET', "/mqtt/mysub", Req) ->
+  Params = mochiweb_request:parse_qs(Req),
+  Cid = get_value("clientId", Params, http),
+  Lists = ets:lookup(subscription, ClientId),
+  Status = io_lib:format("~p", [Lists]),
+  Req:ok({"text/plain", iolist_to_binary(Status)});
 %%--------------------------------------------
 %%subscriber topic for client at server side 
 %%--------------------------------------------
