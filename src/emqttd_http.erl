@@ -74,7 +74,7 @@ handle_request('POST', "/mqtt/newpush", Req) ->
     end;
 
 %%------------------------------------------
-%%check client is online or not
+%%check client is online or not, not support cluster
 %%------------------------------------------
 handle_request('GET',"/mqtt/online",Req) ->
     Params = mochiweb_request:parse_qs(Req),
@@ -93,12 +93,13 @@ handle_request('GET',"/mqtt/subtopic", Req) ->
     Topic = list_to_binary(get_value("topic", Params, http)),
     Flag = int(get_value("flag", Params, "1")),
     Qos = int(get_value("qos", Params, "1")),
+    Topics = binary:split(Topic, <<",">>, [global]),
     case emqttd_sm:lookup_session(ClientId) of
         undefined -> Req:ok({"text/plain", <<"BAD_CLIENT">>});
         Session -> #mqtt_session{sess_pid = Sess_pid} = Session,
         case Flag of
-            1 -> _Status = emqttd_session:subscribe(Sess_pid, [{Topic, Qos}]);
-            0 -> _Status = emqttd_session:unsubscribe(Sess_pid, [Topic])
+            1 -> emqttd_session:subscribe(Sess_pid, [{T, Qos} || T <- Topics]);
+            0 -> emqttd_session:unsubscribe(Sess_pid, [{T} || T <- Topic])
         end,
     Req:ok({"text/plain",<<"ok">>})
     end;
