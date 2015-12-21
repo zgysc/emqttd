@@ -32,6 +32,7 @@
 -import(proplists, [get_value/2, get_value/3]).
 
 -export([handle_request/1]).
+-define(ROUTER, emqttd_router).
 
 handle_request(Req) ->
     handle_request(Req:get(method), Req:get(path), Req).
@@ -79,10 +80,17 @@ handle_request('POST', "/mqtt/newpush", Req) ->
 handle_request('GET',"/mqtt/online",Req) ->
     Params = mochiweb_request:parse_qs(Req),
     Cid = get_value("clientId", Params, http),
-    case emqttd_cm:lookup(list_to_binary(Cid)) of
-        undefined -> Req:ok({"text/plain", <<"0">>});
-        _   ->  Req:ok({"text/plain", <<"1">>})
-    end;
+    Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'}))，
+    lists:foreach(Fun(Node) -> 
+        case Node =:= node() of
+            true  -> 
+                    Retl= ?ROUTER:checkonline(Cid);
+            false -> RetR= rpc:cast(Node, ?ROUTER, checkonline, [Cid])
+        end
+    
+    end, Nodes],
+    %%TODO:不会写了,应该所有节点处理完毕后，只要有一个在线的就认为在线
+    Req:ok({"text/plain", <<"1">>});
 
 %%--------------------------------------------
 %%subscriber topic for client at server side 
