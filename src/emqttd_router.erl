@@ -40,7 +40,7 @@
 -include("emqttd_protocol.hrl").
 
 -export([init/1, route/2, lookup_routes/1, has_route/1,
-         add_routes/2, delete_routes/1, delete_routes/2]).
+         add_routes/2, delete_routes/1, delete_routes/2, checkonline/1]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -163,6 +163,12 @@ route(Topic, Msg) ->
 
 dispatch(SubPid, Topic, Msg) -> SubPid ! {dispatch, Topic, Msg}.
 
+%%Check client is online or not
+checkonline(ClientId) ->    
+    case emqttd_cm:lookup(list_to_binary(Cid)) of
+        undefined -> <<"0">>;
+        _   ->  <<"1">>
+    end.
 %%%=============================================================================
 %%% Internal Functions
 %%%=============================================================================
