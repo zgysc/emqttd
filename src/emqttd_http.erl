@@ -82,7 +82,7 @@ handle_request('GET', "/mqtt/online", Req) ->
     Params = mochiweb_request:parse_qs(Req),
     Cid = get_value("clientId", Params, http),
     Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'})),
-    Result= lists:fold(fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
+    Result= lists:foldl(fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
     if
         Result > 0 -> Req:ok({"text/plain", <<"1">>}); 
         Result =:= 0 -> Req:ok({"text/plain", <<"0">>})
@@ -112,7 +112,7 @@ handle_request('GET',"/mqtt/subtopic", Req) ->
         Session -> #mqtt_session{sess_pid = Sess_pid} = Session,
         case Flag of
             1 -> emqttd_session:subscribe(Sess_pid, [{T, Qos} || T <- Topics]);
-            0 -> emqttd_session:unsubscribe(Sess_pid, [{T} || T <- Topic])
+            0 -> emqttd_session:unsubscribe(Sess_pid, [T || T <- Topics])
         end,
     Req:ok({"text/plain",<<"ok">>})
     end;
