@@ -80,7 +80,7 @@ handle_request('POST', "/mqtt/newpush", Req) ->
 %%------------------------------------------
 handle_request('GET', "/mqtt/online", Req) ->
     Params = mochiweb_request:parse_qs(Req),
-    Cid = get_value("clientId", Params, http),
+    Cid = list_to_binary(get_value("clientId", Params, http)),
     Nodes= lists:umerge(ets:match(topic, {'_', '_', '$1'})),
     Result= lists:foldl(fun(Node, Sum) -> rpc:call(Node, ?ROUTER, checkonline, [Cid]) + Sum end, 0, Nodes),
     if
@@ -93,7 +93,7 @@ handle_request('GET', "/mqtt/online", Req) ->
 %%------------------------------------------
 handle_request('GET', "/mqtt/mysub", Req) ->
   Params = mochiweb_request:parse_qs(Req),
-  Cid = get_value("clientId", Params, http),
+  Cid = list_to_binary(get_value("clientId", Params, http)),
   Lists = ets:lookup(subscription, Cid),
   Status = io_lib:format("~p", [Lists]),
   Req:ok({"text/plain", iolist_to_binary(Status)});
