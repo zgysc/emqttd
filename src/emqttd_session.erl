@@ -357,7 +357,7 @@ handle_cast({unsubscribe, Topics0}, Session = #session{client_id     = ClientId,
     Topics = emqttd_broker:foldl_hooks('client.unsubscribe', [ClientId], Topics0),
 
     %% unsubscribe from topic tree
-    ok = emqttd_pubsub:unsubscribe(Topics),
+    ok = emqttd_pubsub:unsubscribe(ClientId, Topics),
 
     ?LOG(info, "unsubscribe ~p", [Topics], Session),
 
