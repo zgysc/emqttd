@@ -164,8 +164,9 @@ route(Topic, Msg) ->
 dispatch(SubPid, Topic, Msg) -> SubPid ! {dispatch, Topic, Msg}.
 
 %%Check client is online or not
+-spec checkonline(binary()) -> non_neg_integer().
 checkonline(ClientId) ->    
-    case emqttd_cm:lookup(list_to_binary(ClientId)) of
+    case emqttd_cm:lookup(ClientId) of
         undefined -> 0;
         _   ->  1
     end.
